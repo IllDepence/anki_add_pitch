@@ -7,6 +7,7 @@ import re
 import sqlite3
 import sys
 import time
+from draw_pitch import pitch_svg
 
 def select_deck():
     decks = []
@@ -24,51 +25,46 @@ def select_deck():
     inp = int(input('\n'))
     return decks[inp]
 
-def get_acc_img(expr_field, dicts):
+def get_acc_patt(expr_field, dicts):
     expr_field = expr_field.replace('[\d]', '')
     expr_field = expr_field.replace('[^\d]', '')
     expr_field = expr_field.strip()
     for dic in dicts:
-        acc_img = dic.get(expr_field, False)
-        if acc_img:
-            return acc_img
+        patt = dic.get(expr_field, False)
+        if patt:
+            return patt
         guess = expr_field.split(' ')[0]
-        acc_img = dic.get(guess, False)
-        if acc_img:
-            return acc_img
+        patt = dic.get(guess, False)
+        if patt:
+            return patt
         guess = re.sub('[<&]', ' ', expr_field).split(' ')[0]
-        acc_img = dic.get(guess, False)
-        if acc_img:
-            return acc_img
+        patt = dic.get(guess, False)
+        if patt:
+            return patt
     return False
+
+def kata_to_hira(s):
+    return ''.join(
+        [chr(ord(ch) - 96) if ('ァ' <= ch <= 'ヴ') else ch for ch in s]
+        )
 
 conn = sqlite3.connect('collection.anki2')
 c = conn.cursor()
 
-acc_dict1 = {}
-with open('accdb_clean.tsv') as f:
+acc_dict = {}
+with open('accdb_minimal.tsv') as f:
     for line in f:
         try:
-            kan, kan_var, disp, ktkn, patt, img = line.strip().split('\u241f')
+            kan, kan_var, disp, ktkn, patt = line.strip().split('\u241f')
         except ValueError:
             print(line)
             sys.exit()
-        if len(img) == 0:
-            continue
-        img = '<img src="{}">'.format(img)
-        acc_dict1[kan] = img
-        acc_dict1[kan_var] = img
-
-acc_dict2 = {}
-with open('ja_pitch_accents.tsv') as f:
-    for line in f:
-        try:
-            wid, kan, hir, patt, img, mor, drp = line.strip().split('\t')
-        except ValueError:
-            continue
-        if len(img) == 0:
-            continue
-        acc_dict2[kan] = img
+        if kan != ktkn:
+            ktkn = kata_to_hira(ktkn)
+        if kan not in acc_dict or ('ー' in acc_dict[kan][0] and kan != ktkn):
+            acc_dict[kan] = (ktkn, patt)
+        if kan_var not in acc_dict or ('ー' in acc_dict[kan][0] and kan != ktkn):
+            acc_dict[kan_var] = (ktkn, patt)
 
 if len(sys.argv) == 2:
     deck_id = sys.argv[1]
@@ -89,18 +85,19 @@ for row in c.execute('SELECT id FROM notes WHERE id IN (SELECT nid FROM'
 for nid in note_ids:
     row = c.execute('SELECT flds FROM notes WHERE id = ?', (nid,)).fetchone()
     flds_str = row[0]
-    if 'ja_pitch_accent' in flds_str:
+    if '<!-- accent_start -->' in flds_str:
         # already has pitch accent image
         num_already_done += 1
         continue
     fields = flds_str.split('\x1f')
     expr_field = fields[0].strip()
-    acc_img = get_acc_img(expr_field, [acc_dict1, acc_dict2])
-    if not acc_img:
+    patt = get_acc_patt(expr_field, [acc_dict])
+    if not patt:
         not_found_list.append([nid, expr_field])
         continue
-    fields[2] = ('{}<br><br><!-- accent_start -->{}<!-- accent_end -->'
-                ).format(fields[2], acc_img)  # add image
+    svg = pitch_svg(*patt)
+    fields[2] = ('{}<!-- accent_start --><br><hr><br>{}<!-- accent_end -->'
+                ).format(fields[2], svg)  # add svg
     new_flds_str = '\x1f'.join(fields)
     c.execute('UPDATE notes SET flds = ? WHERE id = ?', (new_flds_str, nid))
     num_updated += 1

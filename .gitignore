@@ -1,7 +1,7 @@
 __pycache__
 *.pyc
-ja_pitch_accent
-ja_pitch_accents.tsv
+*.swp
+not_found_*
 ACCDB_unicode.csv
 accdb_clean.tsv
 collection.anki2*

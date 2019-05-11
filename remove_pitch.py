@@ -38,9 +38,7 @@ not_found_list = []
 num_updated = 0
 num_already_done = 0
 
-acc_patt = re.compile((
-    "<br><br><!-- accent_start --><img src=\"ja_pitch_accent_\d-\d\.png\">"
-    "<!-- accent_end -->"))
+acc_patt = re.compile("<!-- accent_start -->.+<!-- accent_end -->", re.S)
 
 for row in c.execute('SELECT id FROM notes WHERE id IN (SELECT nid FROM'
                       ' cards WHERE did = ?) ORDER BY id', (deck_id,)):
@@ -50,7 +48,7 @@ for row in c.execute('SELECT id FROM notes WHERE id IN (SELECT nid FROM'
 for nid in note_ids:
     row = c.execute('SELECT flds FROM notes WHERE id = ?', (nid,)).fetchone()
     flds_str = row[0]
-    if 'ja_pitch_accent' not in flds_str:
+    if 'accent_start' not in flds_str:
         # has no pitch accent image
         num_already_done += 1
         continue

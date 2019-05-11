@@ -2,8 +2,7 @@
 
         github.com/javdejong/nhk-pronunciation/blob/master/ACCDB_unicode.csv
 
-    to only contain necessary information to display pitch accent pattern. Also
-    add identifier for github.com/kishimoto-tsuneyo/ja_pitch_accent/ images.
+    to only contain necessary information to display pitch accent pattern.
 
     input CSV columns:      example values:             note:
          0 NID              56405
@@ -43,35 +42,6 @@
 import csv
 
 words_done = []
-patt_to_img_id = {
-    '0': '0-1',
-    '01': '0-2',
-    '011': '0-3',
-    '0111': '0-4',
-    '01111': '0-5',
-    '011111': '0-6',
-    '2': '1-1',
-    '20': '1-2',
-    '200': '1-3',
-    '2000': '1-4',
-    '20000': '1-5',
-    '200000': '1-6',
-    '02': '2-2',
-    '020': '2-3',
-    '0200': '2-4',
-    '02000': '2-5',
-    '020000': '2-6',
-    '012': '3-3',
-    '0120': '3-4',
-    '01200': '3-5',
-    '012000': '3-6',
-    '0112': '4-4',
-    '01120': '4-5',
-    '011200': '4-6',
-    '01112': '5-5',
-    '011120': '5-6',
-    '011112': '6-6',
-    }
 
 with open('ACCDB_unicode.csv') as f:
     csv_reader = csv.reader(f, delimiter=',', quotechar='"')
@@ -102,21 +72,33 @@ with open('ACCDB_unicode.csv') as f:
         acc_patt_csv_len = len(accent_pattern_csv)
         accent_pattern = '0'*(num_kana-acc_patt_csv_len) + accent_pattern_csv
 
-        img_id = patt_to_img_id.get(accent_pattern, False)
-        if img_id:
-            img_file = 'ja_pitch_accent_{}.png'.format(img_id)
-        else:
-            img_file = ''
+        # Extend pattern to include first position after the word
+        #
+        # 0 -> 01
+        # 2 -> 20
+        # 01 -> 011
+        # 02 -> 020
+        # 20 -> 200
+        if accent_pattern == '0':
+            accent_pattern = '01'
+        elif accent_pattern == '1':
+            print('Something seems to be wrong with {}.'.format(writing_nhk))
+            sys.exit()
+        elif accent_pattern == '2':
+            accent_pattern = '01'
+        elif accent_pattern[-1]  == '1':
+            accent_pattern += '1'
+        elif accent_pattern[-1] in ['0', '2']:
+            accent_pattern += '0'
 
         new_vals = [
             writing_nhk,
             writing_alt,
             writing_disp,
             katakana,
-            accent_pattern,
-            img_file
+            accent_pattern
             ]
         sep = '\u241f'
         line = sep.join(new_vals)
-        with open('accdb_clean.tsv', 'a') as f:
+        with open('accdb_minimal.tsv', 'a') as f:
             f.write('{}\n'.format(line))
