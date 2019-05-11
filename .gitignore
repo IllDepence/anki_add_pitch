@@ -1,0 +1,8 @@
+__pycache__
+*.pyc
+ja_pitch_accent
+ja_pitch_accents.tsv
+ACCDB_unicode.csv
+accdb_clean.tsv
+collection.anki2*
+collection.media.db2*
