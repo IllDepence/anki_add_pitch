@@ -78,6 +78,9 @@ with open('accdb_minimal.tsv') as f:
         if kan_var not in acc_dict or \
                 ('ー' in acc_dict[kan_var][0] and kan_var != ktkn):
             acc_dict[kan_var] = (ktkn, patt)
+# with open('accdb.js', 'w') as f:
+#     f.write(json.dumps(acc_dict))
+# sys.exit()
 
 note_ids = []
 not_found_list = []

@@ -31,9 +31,9 @@ def pitch_svg(word, patt):
     """
 
 
-    if len(patt) - len(word) != 1:
-        print(('pattern should be length of word + 1 (got: {}, {})'
-              ).format(word, patt))
+    if len(patt) - len(word) not in [0, 1]:
+        print(('pattern should be length of word or length of word + 1 (got: '
+               '{}, {})').format(word, patt))
         return False
 
     svg_width = (len(word) * 29) + 19

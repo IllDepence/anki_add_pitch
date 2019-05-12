@@ -72,23 +72,20 @@ with open('ACCDB_unicode.csv') as f:
         acc_patt_csv_len = len(accent_pattern_csv)
         accent_pattern = '0'*(num_kana-acc_patt_csv_len) + accent_pattern_csv
 
-        # Extend pattern to include first position after the word
+        # Extend pattern to include first position after the word, if
+        # implicitly given.
         #
         # 0 -> 01
         # 2 -> 20
-        # 01 -> 011
-        # 02 -> 020
-        # 20 -> 200
+        # 0*2 -> 0*20
         if accent_pattern == '0':
             accent_pattern = '01'
         elif accent_pattern == '1':
             print('Something seems to be wrong with {}.'.format(writing_nhk))
             sys.exit()
         elif accent_pattern == '2':
-            accent_pattern = '01'
-        elif accent_pattern[-1]  == '1':
-            accent_pattern += '1'
-        elif accent_pattern[-1] in ['0', '2']:
+            accent_pattern = '20'
+        elif accent_pattern[-1] == '2':
             accent_pattern += '0'
 
         new_vals = [
