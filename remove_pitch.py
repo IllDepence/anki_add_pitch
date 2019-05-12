@@ -8,7 +8,7 @@ import sqlite3
 import sys
 import time
 
-def select_deck():
+def select_deck(c):
     decks = []
     for row in c.execute('SELECT decks FROM col'):
         deks = json.loads(row[0])
@@ -24,13 +24,19 @@ def select_deck():
     inp = int(input('\n'))
     return decks[inp]
 
-conn = sqlite3.connect('collection.anki2')
+if len(sys.argv) < 2:
+    print('usage: python3 remove_pitch.py /path/to/collection.anki2 [deck_id]')
+    sys.exit()
+
+coll_path = sys.argv[1]
+
+conn = sqlite3.connect(coll_path)
 c = conn.cursor()
 
-if len(sys.argv) == 2:
-    deck_id = sys.argv[1]
+if len(sys.argv) == 3:
+    deck_id = sys.argv[2]
 else:
-    deck_tpl = select_deck()
+    deck_tpl = select_deck(c)
     deck_id = deck_tpl[0]
 
 note_ids = []
@@ -55,7 +61,9 @@ for nid in note_ids:
     fields = flds_str.split('\x1f')
     fields[2] = re.sub(acc_patt, '', fields[2])
     new_flds_str = '\x1f'.join(fields)
-    c.execute('UPDATE notes SET flds = ? WHERE id = ?', (new_flds_str, nid))
+    mod_time = int(time.time())
+    c.execute('UPDATE notes SET usn = ?, mod = ?, flds = ? WHERE id = ?',
+              (-1, mod_time, new_flds_str, nid))
     num_updated += 1
 conn.commit()
 

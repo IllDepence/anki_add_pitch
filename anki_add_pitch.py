@@ -9,7 +9,7 @@ import sys
 import time
 from draw_pitch import pitch_svg
 
-def select_deck():
+def select_deck(c):
     decks = []
     for row in c.execute('SELECT decks FROM col'):
         deks = json.loads(row[0])
@@ -18,7 +18,7 @@ def select_deck():
             d_name = deks[key]['name']
             decks.append((d_id, d_name))
 
-    print('Which deck would you like to extend?\n')
+    print('Which deck would you like to extend? (enter the number)\n')
 
     for i in range(len(decks)):
         print(' [{}] {}'.format(i, decks[i][1]))
@@ -48,8 +48,20 @@ def kata_to_hira(s):
         [chr(ord(ch) - 96) if ('ァ' <= ch <= 'ヴ') else ch for ch in s]
         )
 
-conn = sqlite3.connect('collection.anki2')
+if len(sys.argv) < 2:
+    print('usage: python3 anki_add_pitch.py /path/to/collection.anki2 [deck_id]')
+    sys.exit()
+
+coll_path = sys.argv[1]
+
+conn = sqlite3.connect(coll_path)
 c = conn.cursor()
+
+if len(sys.argv) == 3:
+    deck_id = sys.argv[2]
+else:
+    deck_tpl = select_deck(c)
+    deck_id = deck_tpl[0]
 
 acc_dict = {}
 with open('accdb_minimal.tsv') as f:
@@ -63,19 +75,15 @@ with open('accdb_minimal.tsv') as f:
             ktkn = kata_to_hira(ktkn)
         if kan not in acc_dict or ('ー' in acc_dict[kan][0] and kan != ktkn):
             acc_dict[kan] = (ktkn, patt)
-        if kan_var not in acc_dict or ('ー' in acc_dict[kan][0] and kan != ktkn):
+        if kan_var not in acc_dict or \
+                ('ー' in acc_dict[kan_var][0] and kan_var != ktkn):
             acc_dict[kan_var] = (ktkn, patt)
-
-if len(sys.argv) == 2:
-    deck_id = sys.argv[1]
-else:
-    deck_tpl = select_deck()
-    deck_id = deck_tpl[0]
 
 note_ids = []
 not_found_list = []
 num_updated = 0
 num_already_done = 0
+num_svg_fail = 0
 
 for row in c.execute('SELECT id FROM notes WHERE id IN (SELECT nid FROM'
                       ' cards WHERE did = ?) ORDER BY id', (deck_id,)):
@@ -96,15 +104,22 @@ for nid in note_ids:
         not_found_list.append([nid, expr_field])
         continue
     svg = pitch_svg(*patt)
+    if not svg:
+        num_svg_fail += 1
+        continue
     fields[2] = ('{}<!-- accent_start --><br><hr><br>{}<!-- accent_end -->'
                 ).format(fields[2], svg)  # add svg
     new_flds_str = '\x1f'.join(fields)
-    c.execute('UPDATE notes SET flds = ? WHERE id = ?', (new_flds_str, nid))
+    mod_time = int(time.time())
+    c.execute('UPDATE notes SET usn = ?, mod = ?, flds = ? WHERE id = ?',
+              (-1, mod_time, new_flds_str, nid))
     num_updated += 1
 conn.commit()
 
+print('\n- - - done - - -')
 print('skipped {} already annotated notes'.format(num_already_done))
 print('updated {} notes'.format(num_updated))
+print('failed to generate {} annotations'.format(num_svg_fail))
 print('could not find {} expressions'.format(len(not_found_list)))
 if len(not_found_list) > 0:
     with open('not_found_{}'.format(int(time.time())), 'w') as f:
