@@ -1,4 +1,4 @@
-""" Script for generating wadoku_pitchdb.tsv from a wadoku.de XML dump:
+""" Script for generating wadoku_pitchdb.csv from a wadoku.de XML dump:
     https://www.wadoku.de/wiki/display/WAD/Downloads+und+Links
 
     N O T E S
@@ -16,10 +16,10 @@
         hatsuon:    しん[Akz]ぎょう[Akz]そう
         accent:     1—1—1
 
-           １００　１１００　１００     (1 indicating high, 0 low)
+           ＨＬＬ　ＨｈＬＬ　ＨＬＬ     (Ｈ/ｈ indicating high, Ｌ/ｌ low)
         -> しん　　ぎょう　　そう
 
-           １０１１０１００
+           ＨＬＨｈＬＨＬＬ
         -> しんぎょうそう
 
     Note that "hatsuon" can contain more than just [Akz] tokens. Example:
@@ -33,10 +33,11 @@
 
             １２３４５６７８９10  <- hiragana position
             ０１１１１０００００  <- incorrect
+            ＬＨＨＨＨＬＬＬＬＬ  <- incorrect
             しゃしょうしゅぎしゃ
 
             １１２２３４４５６６  <- mora position
-            ００１１１１１１００  <- correct
+            ＬｌＨｈＨＨｈＨＬｌ  <- correct
             しゃしょうしゅぎしゃ
 """
 
@@ -45,47 +46,59 @@ import sys
 import xml.etree.ElementTree as ET
 
 def mora_len(hira):
-    return len([c for c in hira if c not in ['ゃ', 'ゅ', 'ょ']])
+    return len([c for c in hira if c not in
+        ['ゃ', 'ゅ', 'ょ', 'ぁ', 'ぃ', 'ぅ', 'ぇ', 'ぉ']
+        ])
 
-def hira_to_mora_pos(hira, pos):
-    hira_mora_map = []
-    m_pos = 0
-    for h_pos, h in enumerate(hira):
-        if h_pos > 0 and h not in ['ゃ', 'ゅ', 'ょ']:
-            m_pos += 1
-        hira_mora_map.append(m_pos)
-    return hira_mora_map[pos]
+def mora_pos_to_hira_pos_map(hira):
+    """ Example:                                        pitch pattern extension
+            in: 'しゅんかしゅうとう'                        v
+            out: [[0, 1], [2], [3], [4, 5], [6], [7], [8], [9]]
+    """
 
-def mora_to_hira_pos(hira, pos):
+    combiners = ['ゃ', 'ゅ', 'ょ', 'ぁ', 'ぃ', 'ぅ', 'ぇ', 'ぉ']
     # add one character for position in pattern succeeding word
     hira_ex = hira + 'ゑ'
     mora_hira_map = [[] for i in range(mora_len(hira_ex))]
     m_pos = 0
     for h_pos, h in enumerate(hira_ex):
-        if h_pos > 0 and h not in ['ゃ', 'ゅ', 'ょ']:
-            m_pos += 1
         mora_hira_map[m_pos].append(h_pos)
-    return mora_hira_map[pos]
+        if h_pos+1 < len(hira_ex) and hira_ex[h_pos+1] in combiners:
+            pass
+        else:
+            m_pos += 1
+    return mora_hira_map
 
 def zero_one_patt(hira, accent):
-    first_mora_positions = mora_to_hira_pos(hira, 0)
+    m2h_pos_map = mora_pos_to_hira_pos_map(hira)
+    first_mora_pos = m2h_pos_map[0]
+    patt = ['#']*(len(hira)+1)  # placeholders
     if accent == 1:
         # start high and instadrop
-        patt = [0]*(len(hira)+1)
-        for fmp in first_mora_positions:
-            patt[fmp] = 1
+        patt[0] = 'H'
+        if len(first_mora_pos) == 2:
+            patt[1] = 'h'
+        for hira_pos in m2h_pos_map[1:]:
+            patt[hira_pos[0]] = 'L'
+            if len(hira_pos) == 2:
+                patt[hira_pos[1]] = 'l'
     else:
         # start low and instarise
-        patt = [1]*(len(hira)+1)
-        for fmp in first_mora_positions:
-            patt[fmp] = 0
+        patt[0] = 'L'
+        if len(first_mora_pos) == 2:
+            patt[1] = 'l'
+        for hira_pos in m2h_pos_map[1:]:
+            patt[hira_pos[0]] = 'H'
+            if len(hira_pos) == 2:
+                patt[hira_pos[1]] = 'h'
         # then drop after accent pos (unless accent is 0)
         if accent != 0:
-            # position after accent b/c hira is 0 based ↓
-            for i in range(min(mora_to_hira_pos(hira, accent)), len(hira)+1):
-                patt[i] = 0
-    # convert to string
-    return ''.join([str(zo) for zo in patt])
+            for hira_pos in m2h_pos_map[accent:]:
+                patt[hira_pos[0]] = 'L'
+                if len(hira_pos) == 2:
+                    patt[hira_pos[1]] = 'l'
+    # concat
+    return ''.join(patt)
 
 def zero_one_patt_complicated(hira, hatsuon, accent_txt):
     # split accent
@@ -109,7 +122,7 @@ def zero_one_patt_complicated(hira, hatsuon, accent_txt):
     not_last = [patt[:-1] for patt in zo_patts[0:-1]]  # cut last element
     last = zo_patts[-1:]  #  use a is
     # convert to string
-    return ''.join([str(zo) for zo in not_last+last])
+    return ''.join(not_last+last)
 
 if len(sys.argv) != 2:
     print('usage: python3 wadoku_parse.py /path/to/wadoku.xml')
@@ -119,7 +132,7 @@ tree = ET.parse(sys.argv[1])
 entries_node = tree.getroot()
 entries = entries_node.getchildren()
 accent_number_patt = re.compile(r'\d+(—\d+)*')
-with open('wadoku_pitchdb.tsv', 'w') as f:
+with open('wadoku_pitchdb.csv', 'w') as f:
     for entry in entries:
         # get nodes with the data we want
         form = entry.find('{http://www.wadoku.de/xml/entry}form')
@@ -149,11 +162,11 @@ with open('wadoku_pitchdb.tsv', 'w') as f:
         acc_patts = []
         for acc_txt in accent_txts:
             if not accent_number_patt.fullmatch(acc_txt):
-                # Example from CSV: 々|じおくり|じ･おくり|-
+                # Example from XML dump: 々|じおくり|じ･おくり|-
                 continue
             try:
                 if int(acc_txt) > len(hira_txt):
-                    # Example from CSV: …米|まい|まい|5,0
+                    # Example from XML dump: …米|まい|まい|5,0
                     continue
                 zo_patt = zero_one_patt(hira_txt, int(acc_txt))
             except ValueError:

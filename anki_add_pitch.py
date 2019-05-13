@@ -77,7 +77,7 @@ else:
     deck_id = deck_tpl[0]
 
 acc_dict = {}
-with open('wadoku_pitchdb.tsv') as f:
+with open('wadoku_pitchdb.csv') as f:
     for line in f:
         orths_txt, hira, hz, accs_txt, patts_txt = line.strip().split('\u241e')
         orth_txts = orths_txt.split('\u241f')
@@ -86,6 +86,7 @@ with open('wadoku_pitchdb.tsv') as f:
         if is_katakana(orth_txts[0]):
             hira = hira_to_kata(hira)
         for orth in orth_txts:
+            # FIXME: deal with overlapping orths (e.g. 花->はな, 花->はなやか)
             acc_dict[orth] = (hira, patt_common)
 # with open('accdb.js', 'w') as f:
 #     f.write(json.dumps(acc_dict))
@@ -115,7 +116,9 @@ for nid in note_ids:
     if not patt:
         not_found_list.append([nid, expr_field])
         continue
-    svg = pitch_svg(*patt)
+    hira, LlHh_patt = patt
+    LH_patt = re.sub(r'[lh]', '', LlHh_patt)
+    svg = pitch_svg(hira, LH_patt)
     if not svg:
         num_svg_fail += 1
         continue
