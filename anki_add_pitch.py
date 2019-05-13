@@ -1,5 +1,11 @@
-""" Add pitch accent indicators to thrid field (assumend to be the reading
-    field) of Anki cards.
+""" Add pitch accent indicators to Anki cards.
+
+    Below script makes use of data from Wadoku by Ulrich Apel.
+    (See file wadoku_parse.py for more details.)
+    Wadoku license information is available on the web:
+
+    http://www.wadoku.de/wiki/display/WAD/Wörterbuch+Lizenz
+    http://www.wadoku.de/wiki/display/WAD/%28Vorschlag%29+Neue+Wadoku-Daten+Lizenz
 """
 
 import json
@@ -43,10 +49,17 @@ def get_acc_patt(expr_field, dicts):
             return patt
     return False
 
-def kata_to_hira(s):
+def hira_to_kata(s):
     return ''.join(
-        [chr(ord(ch) - 96) if ('ァ' <= ch <= 'ヴ') else ch for ch in s]
+        [chr(ord(ch) + 96) if ('ぁ' <= ch <= 'ゔ') else ch for ch in s]
         )
+
+def is_katakana(s):
+    num_ktkn = 0
+    for ch in s:
+        if ch == 'ー' or ('ァ' <= ch <= 'ヴ'):
+            num_ktkn += 1
+    return num_ktkn / len(s) > .5
 
 if len(sys.argv) < 2:
     print('usage: python3 anki_add_pitch.py /path/to/collection.anki2 [deck_id]')
@@ -64,20 +77,16 @@ else:
     deck_id = deck_tpl[0]
 
 acc_dict = {}
-with open('accdb_minimal.tsv') as f:
+with open('wadoku_pitchdb.tsv') as f:
     for line in f:
-        try:
-            kan, kan_var, disp, ktkn, patt = line.strip().split('\u241f')
-        except ValueError:
-            print(line)
-            sys.exit()
-        if kan != ktkn:
-            ktkn = kata_to_hira(ktkn)
-        if kan not in acc_dict or ('ー' in acc_dict[kan][0] and kan != ktkn):
-            acc_dict[kan] = (ktkn, patt)
-        if kan_var not in acc_dict or \
-                ('ー' in acc_dict[kan_var][0] and kan_var != ktkn):
-            acc_dict[kan_var] = (ktkn, patt)
+        orths_txt, hira, hz, accs_txt, patts_txt = line.strip().split('\u241e')
+        orth_txts = orths_txt.split('\u241f')
+        patts = patts_txt.split(',')
+        patt_common = patts[0]  # TODO: extend to support variants?
+        if is_katakana(orth_txts[0]):
+            hira = hira_to_kata(hira)
+        for orth in orth_txts:
+            acc_dict[orth] = (hira, patt_common)
 # with open('accdb.js', 'w') as f:
 #     f.write(json.dumps(acc_dict))
 # sys.exit()

@@ -4,5 +4,7 @@ __pycache__
 not_found_*
 ACCDB_unicode.csv
 accdb_clean.tsv
+accdb_minimal.tsv
 collection.anki2*
 collection.media.db2*
+strip_javdejong_nhk-pronunciation.py

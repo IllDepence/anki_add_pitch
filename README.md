@@ -10,4 +10,4 @@ Script to automatically add pitch accent information to an Anki deck.
 ### Notes
 * generates accent notation similar to [大辞林 アクセント解説](https://www.sanseido-publ.co.jp/publ/dicts/daijirin_ac.html)
 * assumes your Anki cards' *first* and *third* field to contain a word and its reading respectively (e.g. expression, meaning, reading)
-* `accdb_minimal.tsv` was generated using `ACCDB_unicode.csv` from [javdejong/nhk-pronunciation](https://github.com/javdejong/nhk-pronunciation/blob/master/ACCDB_unicode.csv) (see file `strip_javdejong_nhk-pronunciation.py`)
+* `wadoku_pitchdb.tsv` was generated from a [Wadoku XML dump](https://www.wadoku.de/wiki/display/WAD/Downloads+und+Links) (see file `wadoku_parse.py`)
