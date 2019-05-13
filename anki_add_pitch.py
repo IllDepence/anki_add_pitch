@@ -31,22 +31,35 @@ def select_deck(c):
     inp = int(input('\n'))
     return decks[inp]
 
-def get_acc_patt(expr_field, dicts):
+def get_acc_patt(expr_field, reading_field, dicts):
+    def select_best_patt(reading_field, patts):
+        best_pos = 9001
+        best = patts[0]  # default
+        for patt in patts:
+            hira, p = patt
+            try:
+                pos = reading_field.index(hira)
+                if pos < best_pos:
+                    best = patt
+                    best_pos = pos
+            except ValueError:
+                continue
+        return best
     expr_field = expr_field.replace('[\d]', '')
     expr_field = expr_field.replace('[^\d]', '')
     expr_field = expr_field.strip()
     for dic in dicts:
-        patt = dic.get(expr_field, False)
-        if patt:
-            return patt
+        patts = dic.get(expr_field, False)
+        if patts:
+            return select_best_patt(reading_field, patts)
         guess = expr_field.split(' ')[0]
-        patt = dic.get(guess, False)
-        if patt:
-            return patt
+        patts = dic.get(guess, False)
+        if patts:
+            return select_best_patt(reading_field, patts)
         guess = re.sub('[<&]', ' ', expr_field).split(' ')[0]
-        patt = dic.get(guess, False)
-        if patt:
-            return patt
+        patts = dic.get(guess, False)
+        if patts:
+            return select_best_patt(reading_field, patts)
     return False
 
 def hira_to_kata(s):
@@ -59,7 +72,12 @@ def is_katakana(s):
     for ch in s:
         if ch == 'ー' or ('ァ' <= ch <= 'ヴ'):
             num_ktkn += 1
-    return num_ktkn / len(s) > .5
+    return num_ktkn / max(1, len(s)) > .5
+
+def clean_orth(orth):
+    orth = re.sub('[()△×･〈〉{}]', '', orth)  # 
+    orth = orth.replace('…', '〜')  # change depending on what you use
+    return orth
 
 if len(sys.argv) < 2:
     print('usage: python3 anki_add_pitch.py /path/to/collection.anki2 [deck_id]')
@@ -81,13 +99,22 @@ with open('wadoku_pitchdb.csv') as f:
     for line in f:
         orths_txt, hira, hz, accs_txt, patts_txt = line.strip().split('\u241e')
         orth_txts = orths_txt.split('\u241f')
+        if clean_orth(orth_txts[0]) != orth_txts[0]:
+            orth_txts = [clean_orth(orth_txts[0])] + orth_txts
         patts = patts_txt.split(',')
         patt_common = patts[0]  # TODO: extend to support variants?
         if is_katakana(orth_txts[0]):
             hira = hira_to_kata(hira)
         for orth in orth_txts:
-            # FIXME: deal with overlapping orths (e.g. 花->はな, 花->はなやか)
-            acc_dict[orth] = (hira, patt_common)
+            if not orth in acc_dict:
+                acc_dict[orth] = []
+            new = True
+            for patt in acc_dict[orth]:
+                if patt[0] == hira and patt[1] == patt_common:
+                    new = False
+                    break
+            if new:
+                acc_dict[orth].append((hira, patt_common))
 # with open('accdb.js', 'w') as f:
 #     f.write(json.dumps(acc_dict))
 # sys.exit()
@@ -112,7 +139,8 @@ for nid in note_ids:
         continue
     fields = flds_str.split('\x1f')
     expr_field = fields[0].strip()
-    patt = get_acc_patt(expr_field, [acc_dict])
+    reading_field = fields[2].strip()
+    patt = get_acc_patt(expr_field, reading_field, [acc_dict])
     if not patt:
         not_found_list.append([nid, expr_field])
         continue

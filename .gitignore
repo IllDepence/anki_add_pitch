@@ -2,6 +2,7 @@ __pycache__
 *.pyc
 *.swp
 not_found_*
+example.xcf
 ACCDB_unicode.csv
 accdb_clean.tsv
 accdb_minimal.tsv
