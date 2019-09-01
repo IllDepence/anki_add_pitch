@@ -1,5 +1,4 @@
-""" Removes pitch accent indicators from thrid field (assumend to be the reading
-    field) of Anki cards.
+""" Removes pitch accent indicators from Anki cards.
 """
 
 import json
@@ -7,50 +6,27 @@ import re
 import sqlite3
 import sys
 import time
-
-def select_deck(c):
-    decks = []
-    for row in c.execute('SELECT decks FROM col'):
-        deks = json.loads(row[0])
-        for key in deks:
-            d_id = deks[key]['id']
-            d_name = deks[key]['name']
-            decks.append((d_id, d_name))
-
-    print('Which deck would you like to extend?\n')
-
-    for i in range(len(decks)):
-        print(' [{}] {}'.format(i, decks[i][1]))
-    inp = int(input('\n'))
-    return decks[inp]
+from util import select_deck, select_note_fields, get_note_ids
 
 if len(sys.argv) < 2:
-    print('usage: python3 remove_pitch.py /path/to/collection.anki2 [deck_id]')
+    print('usage: python3 remove_pitch.py /path/to/collection.anki2')
     sys.exit()
 
+# open Anki DB
 coll_path = sys.argv[1]
-
 conn = sqlite3.connect(coll_path)
 c = conn.cursor()
 
-if len(sys.argv) == 3:
-    deck_id = sys.argv[2]
-else:
-    deck_tpl = select_deck(c)
-    deck_id = deck_tpl[0]
+# figure out collection structure
+deck_id = select_deck(c, 'From which deck would you like to remove?')
+note_ids = get_note_ids(c, deck_id)
+expr_idx, reading_idx = select_note_fields(c, note_ids[0])
 
-note_ids = []
+# remove pitch accent indicators
+acc_patt = re.compile("<!-- accent_start -->.+<!-- accent_end -->", re.S)
 not_found_list = []
 num_updated = 0
 num_already_done = 0
-
-acc_patt = re.compile("<!-- accent_start -->.+<!-- accent_end -->", re.S)
-
-for row in c.execute('SELECT id FROM notes WHERE id IN (SELECT nid FROM'
-                      ' cards WHERE did = ?) ORDER BY id', (deck_id,)):
-    nid = row[0]
-    note_ids.append(nid)
-
 for nid in note_ids:
     row = c.execute('SELECT flds FROM notes WHERE id = ?', (nid,)).fetchone()
     flds_str = row[0]
@@ -59,7 +35,7 @@ for nid in note_ids:
         num_already_done += 1
         continue
     fields = flds_str.split('\x1f')
-    fields[2] = re.sub(acc_patt, '', fields[2])
+    fields[reading_idx] = re.sub(acc_patt, '', fields[reading_idx])
     new_flds_str = '\x1f'.join(fields)
     mod_time = int(time.time())
     c.execute('UPDATE notes SET usn = ?, mod = ?, flds = ? WHERE id = ?',

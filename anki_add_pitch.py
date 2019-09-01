@@ -14,22 +14,31 @@ import sqlite3
 import sys
 import time
 from draw_pitch import pitch_svg
+from util import select_deck, select_note_fields, get_note_ids
 
-def select_deck(c):
-    decks = []
-    for row in c.execute('SELECT decks FROM col'):
-        deks = json.loads(row[0])
-        for key in deks:
-            d_id = deks[key]['id']
-            d_name = deks[key]['name']
-            decks.append((d_id, d_name))
-
-    print('Which deck would you like to extend? (enter the number)\n')
-
-    for i in range(len(decks)):
-        print(' [{}] {}'.format(i, decks[i][1]))
-    inp = int(input('\n'))
-    return decks[inp]
+def get_accent_dict(path):
+    acc_dict = {}
+    with open(path) as f:
+        for line in f:
+            orths_txt, hira, hz, accs_txt, patts_txt = line.strip().split('\u241e')
+            orth_txts = orths_txt.split('\u241f')
+            if clean_orth(orth_txts[0]) != orth_txts[0]:
+                orth_txts = [clean_orth(orth_txts[0])] + orth_txts
+            patts = patts_txt.split(',')
+            patt_common = patts[0]  # TODO: extend to support variants?
+            if is_katakana(orth_txts[0]):
+                hira = hira_to_kata(hira)
+            for orth in orth_txts:
+                if not orth in acc_dict:
+                    acc_dict[orth] = []
+                new = True
+                for patt in acc_dict[orth]:
+                    if patt[0] == hira and patt[1] == patt_common:
+                        new = False
+                        break
+                if new:
+                    acc_dict[orth].append((hira, patt_common))
+    return acc_dict
 
 def get_acc_patt(expr_field, reading_field, dicts):
     def select_best_patt(reading_field, patts):
@@ -80,56 +89,31 @@ def clean_orth(orth):
     return orth
 
 if len(sys.argv) < 2:
-    print('usage: python3 anki_add_pitch.py /path/to/collection.anki2 [deck_id]')
+    print('usage: python3 anki_add_pitch.py /path/to/collection.anki2')
     sys.exit()
 
-coll_path = sys.argv[1]
-
-conn = sqlite3.connect(coll_path)
-c = conn.cursor()
-
-if len(sys.argv) == 3:
-    deck_id = sys.argv[2]
-else:
-    deck_tpl = select_deck(c)
-    deck_id = deck_tpl[0]
-
-acc_dict = {}
-with open('wadoku_pitchdb.csv') as f:
-    for line in f:
-        orths_txt, hira, hz, accs_txt, patts_txt = line.strip().split('\u241e')
-        orth_txts = orths_txt.split('\u241f')
-        if clean_orth(orth_txts[0]) != orth_txts[0]:
-            orth_txts = [clean_orth(orth_txts[0])] + orth_txts
-        patts = patts_txt.split(',')
-        patt_common = patts[0]  # TODO: extend to support variants?
-        if is_katakana(orth_txts[0]):
-            hira = hira_to_kata(hira)
-        for orth in orth_txts:
-            if not orth in acc_dict:
-                acc_dict[orth] = []
-            new = True
-            for patt in acc_dict[orth]:
-                if patt[0] == hira and patt[1] == patt_common:
-                    new = False
-                    break
-            if new:
-                acc_dict[orth].append((hira, patt_common))
+# load pitch data
+print('loading pitch data')
+acc_dict = get_accent_dict('wadoku_pitchdb.csv')
 # with open('accdb.js', 'w') as f:
 #     f.write(json.dumps(acc_dict))
 # sys.exit()
 
-note_ids = []
+# open Anki DB
+coll_path = sys.argv[1]
+conn = sqlite3.connect(coll_path)
+c = conn.cursor()
+
+# figure out collection structure
+deck_id = select_deck(c, 'Which deck would you like to extend?')
+note_ids = get_note_ids(c, deck_id)
+expr_idx, reading_idx = select_note_fields(c, note_ids[0])
+
+# extend notes
 not_found_list = []
 num_updated = 0
 num_already_done = 0
 num_svg_fail = 0
-
-for row in c.execute('SELECT id FROM notes WHERE id IN (SELECT nid FROM'
-                      ' cards WHERE did = ?) ORDER BY id', (deck_id,)):
-    nid = row[0]
-    note_ids.append(nid)
-
 for nid in note_ids:
     row = c.execute('SELECT flds FROM notes WHERE id = ?', (nid,)).fetchone()
     flds_str = row[0]
@@ -138,8 +122,8 @@ for nid in note_ids:
         num_already_done += 1
         continue
     fields = flds_str.split('\x1f')
-    expr_field = fields[0].strip()
-    reading_field = fields[2].strip()
+    expr_field = fields[expr_idx].strip()
+    reading_field = fields[reading_idx].strip()
     patt = get_acc_patt(expr_field, reading_field, [acc_dict])
     if not patt:
         not_found_list.append([nid, expr_field])
@@ -150,8 +134,9 @@ for nid in note_ids:
     if not svg:
         num_svg_fail += 1
         continue
-    fields[2] = ('{}<!-- accent_start --><br><hr><br>{}<!-- accent_end -->'
-                ).format(fields[2], svg)  # add svg
+    fields[reading_idx] = (
+        '{}<!-- accent_start --><br><hr><br>{}<!-- accent_end -->'
+        ).format(fields[reading_idx], svg)  # add svg
     new_flds_str = '\x1f'.join(fields)
     mod_time = int(time.time())
     c.execute('UPDATE notes SET usn = ?, mod = ?, flds = ? WHERE id = ?',

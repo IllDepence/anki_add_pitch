@@ -32,7 +32,6 @@
             しゃしょうしゅぎしゃ, 5
 
             １２３４５６７８９10  <- hiragana position
-            ０１１１１０００００  <- incorrect
             ＬＨＨＨＨＬＬＬＬＬ  <- incorrect
             しゃしょうしゅぎしゃ
 
