@@ -129,7 +129,7 @@ if len(sys.argv) != 2:
 
 tree = ET.parse(sys.argv[1])
 entries_node = tree.getroot()
-entries = entries_node.getchildren()
+entries = list(entries_node)
 accent_number_patt = re.compile(r'\d+(—\d+)*')
 with open('wadoku_pitchdb.csv', 'w') as f:
     for entry in entries:
